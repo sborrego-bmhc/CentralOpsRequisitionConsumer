@@ -1,0 +1,83 @@
+# More information about the configuration file can be found here:
+# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-config.html
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "RequisitionConsumerFn"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.validate.parameters]
+lint = true
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "RequisitionConsumerFn"
+region = "us-west-2"
+image_repositories = []
+profile = "dev-team1-prod"
+
+[default.package.parameters]
+resolve_s3 = true
+
+[default.sync.parameters]
+watch = true
+
+[default.local_start_api.parameters]
+warm_containers = "EAGER"
+
+[default.local_start_lambda.parameters]
+warm_containers = "EAGER"
+
+[dev.deploy.parameters]
+stack_name = "RequisitionConsumerFn"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "RequisitionConsumerFn"
+region = "us-west-2"
+image_repositories = []
+profile = "dev-team1"
+parameter_overrides = [
+    "Environment=dev",
+    "QueryBucketName=new-patient-attrition-bucket",
+    "PowerToolsLayerArn=arn:aws:lambda:us-west-2:916246436722:layer:aws_lambda_powertools-layer:2",
+    "S3QueryBucketPolicyResource=arn:aws:s3:::new-patient-attrition-bucket/*",
+    "S3OutputBucketPolicyResource=arn:aws:s3:::central-ops-zendesk-ticket-bucket/*",
+    "DynamoDbPolicyResource=arn:aws:dynamodb:us-west-2:916246436722:table/BHC_REQUISITIONS",
+    "DynamoDbRequisitionQueryPolicyResource=arn:aws:dynamodb:us-west-2:916246436722:table/BHC_REQUISITIONS/index/requisition_status-index",
+    "OutputBucketName=central-ops-zendesk-ticket-bucket"
+] 
+
+[prod.deploy.parameters]
+stack_name = "central-ops-auth-processor-sfn"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "central-ops-auth-processor-sfn"
+region = "us-west-2"
+image_repositories = []
+profile = "dev-team1-prod"
+parameter_overrides = [
+    "Env=prod",
+    "BucketName=central-ops-appt-query-bucket-prod",
+    "SecretName=central-ops-prod",
+    "RegionName=us-west-2",
+    "RoleArn=arn:aws:iam::461354986992:role/root-to-prod-redshift-access-role",
+    "RoleSessionName=central-ops-get-appt-prod-session",
+    "PowerToolsLayerArn=arn:aws:lambda:us-west-2:043270149596:layer:aws_lambda_powertools-layer:1",
+    "DefaultFormosOfficeId=48",
+    "DefaultFormosProviderId=520",
+    "ApptTTL=5184000",
+    "PatientCaseTTL=15552000",
+    "S3BucketPolicyResource=arn:aws:s3:::central-ops-appt-query-bucket-prod/*",
+    "SecretsManagerPolicyResource=arn:aws:secretsmanager:us-west-2:043270149596:secret:central-ops-prod-JtND8n",
+    "STSPolicyResource=arn:aws:iam::461354986992:role/root-to-prod-redshift-access-role",
+    "DynamoDbPolicyResource=arn:aws:dynamodb:us-west-2:043270149596:table/BHC_DATA_MODEL",
+
+] 

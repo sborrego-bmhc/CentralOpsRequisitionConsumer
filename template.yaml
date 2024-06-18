@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  RequisitionConsumerFn
+
+  Sample SAM Template for RequisitionConsumerFn
+Parameters:
+  PowerToolsLayerArn:
+    Type: 'String'
+  S3OutputBucketPolicyResource:
+    Type: 'String'
+  S3QueryBucketPolicyResource:
+    Type: 'String'
+  DynamoDbPolicyResource:
+    Type: 'String'
+  DynamoDbRequisitionQueryPolicyResource:
+    Type: 'String'
+  Environment:
+    Type: 'String'
+  QueryBucketName:
+    Type: 'String'
+  OutputBucketName:
+    Type: 'String'
+
+Resources:
+  RequisitionConsumerFn:
+    Type: AWS::Serverless::Function 
+    Properties:
+      FunctionName: RequisitionConsumerFn
+      CodeUri: functions/requisition_consumer/
+      Handler: requisition_consumer.lambda_handler
+      Runtime: python3.10
+      Timeout: 120
+      Architectures:
+      - x86_64
+      Layers:
+      - !Ref PowerToolsLayerArn      
+      Environment:
+        Variables:
+          environment: !Ref Environment
+          query_bucket_name: !Ref QueryBucketName
+          output_bucket_name: !Ref OutputBucketName
+      Policies:
+      - Version: '2012-10-17'
+        Statement: 
+        - Sid: S3PutObjectPolicy
+          Effect: Allow
+          Action: s3:PutObject
+          Resource: !Ref S3OutputBucketPolicyResource
+        - Sid: S3GetObjectPolicy
+          Effect: Allow
+          Action: s3:GetObject
+          Resource: !Ref S3QueryBucketPolicyResource
+        - Sid: QueryDynamoPolicy
+          Effect: Allow
+          Action: dynamodb:Query
+          Resource:
+          - !Ref DynamoDbPolicyResource
+          - !Ref DynamoDbRequisitionQueryPolicyResource
+        - Sid: UpdateDynamoPolicy
+          Effect: Allow
+          Action: dynamodb:UpdateItem
+          Resource: !Ref DynamoDbPolicyResource
