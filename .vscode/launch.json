@@ -3,15 +3,15 @@
         {
             "type": "aws-sam",
             "request": "direct-invoke",
-            "name": "DEV zendesk_ticket_query",
+            "name": "DEV requisition_consumer",
             "invokeTarget": {
                 "target": "template",
                 "templatePath": "${workspaceFolder}/dev.yaml",
-                "logicalId": "ZendeskTicketQueryFn"
+                "logicalId": "RequisitionConsumerFn"
             },
             "lambda": {
                 "payload": {
-                    "path": "events/DEV_ticket_query_event.json"
+                    "path": "events/DEV_requisition_consumer.json"
                 },
                 "environmentVariables": {}
             }

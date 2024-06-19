@@ -1,26 +1,10 @@
 from aws_lambda_powertools.utilities import parameters
 from aws_lambda_powertools import Logger
 from datetime import datetime, timedelta
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Key, Attr
 from aws_lambda_powertools.shared.json_encoder import Encoder
 import boto3
 import os
-
-
-class s3Exception(Exception):
-    pass
-
-class DynamoQueryException(Exception):
-    pass
-
-
-class ApptLookaheadException(Exception):
-    pass
-
-
-class NoApptRecordFoundException(Exception):
-    pass
-
 
 class DynamoUpdateException(Exception):
     pass
@@ -57,8 +41,49 @@ def update_item(item, table):
         raise DynamoUpdateException(e)
 
 
+def check_NP_ATTR_close_criteria():
+    pass
+
+
+def handle_req_expiration():
+    pass
+
+
 def lambda_handler(event, context):
-    if event.get('event_type') == 'Scheduled':
-        pass
+    if event.get('event_type') == 'Scheduled': # placeholder
+        # query dynamo for consumption dates
+        # TODO: add last evaluated key pagination
+        response = bhc_requisitions.scan(IndexName='consumption_date-index')
+        for req in response.get('Items'):
+            consumption_date = int(req.get('consumption_date'))
+            now = int(datetime.now().timestamp())
+
+            # "ticket_scheduling_result_tag_value": "scheduled_follow_up" 
+            # TODO: get sched tag values
+            # TODO: make rule for tag values
+
+            # TODO: write event
+
+            if now > consumption_date:
+
+                # close requisition
+                partition_key = req.get('partition_key')
+                sort_key = 'METADATA'
+                update_item({
+                    'partition_key': partition_key,
+                    'sort_key': sort_key,
+                    'requisition_status': 'CLOSED'
+                },
+                bhc_requisitions)
+                
+
+                # delete consumption_date attr
+                bhc_requisitions.update_item(
+                    Key={
+                        'partition_key': partition_key,
+                        'sort_key': sort_key
+                    },
+                    UpdateExpression='REMOVE consumption_date'
+                )
 
     return

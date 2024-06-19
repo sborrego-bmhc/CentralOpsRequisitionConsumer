@@ -1,16 +1,3 @@
 {
-  "apt_status": "Delete",
-  "apt_date": "2024-04-30",
-  "partition_key": "ATTRITION#235817",
-  "ticket_status": "UNPROCESSED",
-  "sort_key": "METADATA",
-  "apt_procedure": "PI New Patient 60 min.",
-  "email_address": null,
-  "apt_case_type": "Personal Injury",
-  "ticket_type": "reschedule",
-  "pt_chart_no": "PT97262582",
-  "phone_number": null,
-  "apt_id": "235817",
-  "apt_time": "9:30 AM",
-  "case_no": "CS10027358"
+  "event_type": "Scheduled"
 }
