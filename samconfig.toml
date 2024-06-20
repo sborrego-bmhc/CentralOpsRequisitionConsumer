@@ -45,13 +45,9 @@ image_repositories = []
 profile = "dev-team1"
 parameter_overrides = [
     "Environment=dev",
-    "QueryBucketName=new-patient-attrition-bucket",
     "PowerToolsLayerArn=arn:aws:lambda:us-west-2:916246436722:layer:aws_lambda_powertools-layer:2",
-    "S3QueryBucketPolicyResource=arn:aws:s3:::new-patient-attrition-bucket/*",
-    "S3OutputBucketPolicyResource=arn:aws:s3:::central-ops-zendesk-ticket-bucket/*",
     "DynamoDbPolicyResource=arn:aws:dynamodb:us-west-2:916246436722:table/BHC_REQUISITIONS",
     "DynamoDbRequisitionQueryPolicyResource=arn:aws:dynamodb:us-west-2:916246436722:table/BHC_REQUISITIONS/index/requisition_status-index",
-    "OutputBucketName=central-ops-zendesk-ticket-bucket"
 ] 
 
 [prod.deploy.parameters]
@@ -64,5 +60,8 @@ region = "us-west-2"
 image_repositories = []
 profile = "dev-team1-prod"
 parameter_overrides = [
-
+    "Environment=prod",
+    "PowerToolsLayerArn=arn:aws:lambda:us-west-2:043270149596:layer:aws_lambda_powertools-layer:1",
+    "DynamoDbPolicyResource=arn:aws:dynamodb:us-west-2:043270149596:table/BHC_REQUISITIONS",
+    "DynamoDbRequisitionQueryPolicyResource=arn:aws:dynamodb:us-west-2:043270149596:table/BHC_REQUISITIONS/index/requisition_status-index",
 ] 

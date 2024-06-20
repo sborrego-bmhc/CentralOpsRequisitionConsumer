@@ -7,19 +7,11 @@ Description: >
 Parameters:
   PowerToolsLayerArn:
     Type: 'String'
-  S3OutputBucketPolicyResource:
-    Type: 'String'
-  S3QueryBucketPolicyResource:
-    Type: 'String'
   DynamoDbPolicyResource:
     Type: 'String'
   DynamoDbRequisitionQueryPolicyResource:
     Type: 'String'
   Environment:
-    Type: 'String'
-  QueryBucketName:
-    Type: 'String'
-  OutputBucketName:
     Type: 'String'
 
 Resources:
@@ -38,8 +30,6 @@ Resources:
       Environment:
         Variables:
           environment: !Ref Environment
-          query_bucket_name: !Ref QueryBucketName
-          output_bucket_name: !Ref OutputBucketName
       Policies:
       - Version: '2012-10-17'
         Statement: 
