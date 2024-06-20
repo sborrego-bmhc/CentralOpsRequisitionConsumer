@@ -64,20 +64,5 @@ region = "us-west-2"
 image_repositories = []
 profile = "dev-team1-prod"
 parameter_overrides = [
-    "Env=prod",
-    "BucketName=central-ops-appt-query-bucket-prod",
-    "SecretName=central-ops-prod",
-    "RegionName=us-west-2",
-    "RoleArn=arn:aws:iam::461354986992:role/root-to-prod-redshift-access-role",
-    "RoleSessionName=central-ops-get-appt-prod-session",
-    "PowerToolsLayerArn=arn:aws:lambda:us-west-2:043270149596:layer:aws_lambda_powertools-layer:1",
-    "DefaultFormosOfficeId=48",
-    "DefaultFormosProviderId=520",
-    "ApptTTL=5184000",
-    "PatientCaseTTL=15552000",
-    "S3BucketPolicyResource=arn:aws:s3:::central-ops-appt-query-bucket-prod/*",
-    "SecretsManagerPolicyResource=arn:aws:secretsmanager:us-west-2:043270149596:secret:central-ops-prod-JtND8n",
-    "STSPolicyResource=arn:aws:iam::461354986992:role/root-to-prod-redshift-access-role",
-    "DynamoDbPolicyResource=arn:aws:dynamodb:us-west-2:043270149596:table/BHC_DATA_MODEL",
 
 ] 
