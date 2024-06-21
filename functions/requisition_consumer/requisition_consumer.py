@@ -13,7 +13,7 @@ class InvalidTicketTypeException(Exception):
     pass
 
 # environment variables
-expiration_timestamp_offset = os.environ.get('') # TODO: set env variable
+expiration_timestamp_offset = int(os.environ.get('expiration_timestamp_offset'))
 
 logger = Logger(log_uncaught_exceptions=True)
 
@@ -74,21 +74,23 @@ def process_NP_ATTR_close_requisition(req, partition_key):
     now = int(datetime.now().timestamp())
 
     ticket_type = req.get('ticket_type')
+    sched_tag_value = req.get('ticket_scheduling_result_tag_value')
+    ticket_status = req.get('ticket_status')
     if ticket_type == 'FOLLOW-UP':
         # TODO: ask gurminder to add follow_up_ticket_scheduling_result_tag_value and reschedule_ticket_scheduling_result_tag_value
-        sched_tag_value = req.get('')
         # TODO: get status tags from dynamodb rule
         sched_result_values = ['scheduled_follow_up', 'scheduled_before_ticket_follow_up', 'scheduled_by_contact_center']
     elif ticket_type == 'RESCHEDULE':
-        sched_tag_value = req.get('')
         # TODO: get status tags from dynamodb rule
         # TODO: see what's up with trailing underscores
         sched_result_values = ['sch_scheduled', 'scheduled_before_ticket', 'scheduled_by_contact_center_']
     else:
+        # TODO: raise error or write error event?
         raise InvalidTicketTypeException(f'Invalid ticket_type: {ticket_type}')
     
     
     if now > consumption_date and sched_tag_value in sched_result_values:
+        # successful ticket solve
         # write requisition closed event
         update_item({
         'partition_key': partition_key,
@@ -100,10 +102,19 @@ def process_NP_ATTR_close_requisition(req, partition_key):
         close_requisition(req, partition_key)
         # delete consumption_date attr
         remove_consumption_date_attr(req, partition_key)
+    elif now > consumption_date:
+        # unsuccessful ticket solve
+        update_item({
+            'partition_key': partition_key,
+            'sort_key': f'{datetime.now()}#unsuccessful_ticket_solve',
+            'event_description': f'Ticket solved with unsuccessful scheduling result {sched_tag_value}'
+        })
+        remove_consumption_date_attr(req, partition_key)
     elif consumption_date + expiration_timestamp_offset < int(datetime.now().timestamp()):
+        # expired requisition
         handle_req_expiration(req)
     else:
-        # TODO: 
+        # TODO: take some action here?
         pass
 
 

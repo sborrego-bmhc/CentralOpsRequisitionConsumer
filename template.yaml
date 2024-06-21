@@ -13,6 +13,8 @@ Parameters:
     Type: 'String'
   Environment:
     Type: 'String'
+  ExpirationTimeStampOffset:
+    Type: 'String'
 
 Resources:
   RequisitionConsumerFn:
@@ -30,6 +32,7 @@ Resources:
       Environment:
         Variables:
           environment: !Ref Environment
+          expiration_timestamp_offset: !Ref ExpirationTimeStampOffset
       Policies:
       - Version: '2012-10-17'
         Statement: 
