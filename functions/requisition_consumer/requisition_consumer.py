@@ -13,7 +13,7 @@ class InvalidTicketTypeException(Exception):
     pass
 
 # environment variables
-expiration_timestamp_offset = int(os.environ.get('expiration_timestamp_offset'))
+np_attrition_expiration_timestamp_offset = int(os.environ.get('np_attrition_expiration_timestamp_offset'))
 
 logger = Logger(log_uncaught_exceptions=True)
 
@@ -47,11 +47,11 @@ def update_item(item, table):
         raise DynamoUpdateException(e)
 
 
-def close_requisition(req, partition_key):
+def close_requisition(partition_key):
     update_item({
         'partition_key': partition_key,
         'sort_key': 'METADATA',
-        'requisition_status': 'CLOSED'
+        'requisition_status': 'CLOSED',
     },
     bhc_requisitions)
 
@@ -66,7 +66,72 @@ def remove_consumption_date_attr(req, partition_key):
 
 
 def handle_req_expiration(req):
-    pass
+    # TODO: get requirements, implement
+    return
+
+
+def get_sched_result_tag_success_values(req_type):
+    # TODO: put dynamo stuff behind try/catch block
+    rule = bhc_requisitions.get_item(
+        Key={
+            'partition_key': 'RULE',
+            'sort_key': f'{req_type}_SCHEDULING_RESULT_TAG_VALUES'
+        })
+    
+    return rule.get('Item').get('Success')
+
+def check_ticket_type(req, ticket_type):
+    return
+
+
+
+def validate_NP_ATTR_close(req, partition_key, ticket_type):
+    # system error checks
+    if ticket_type == 'FOLLOW-UP':
+        sched_result_title = req.get('ticket_scheduling_result_tag_title')
+        sched_result_value = req.get('ticket_scheduling_result_tag_value')
+        sched_result_values_list = get_sched_result_tag_success_values(f'NP_COMPLETED_ATTRITION')
+    elif ticket_type == 'MISSED':
+        sched_result_title = req.get('ticket_patient_scheduling_result_tag_title')
+        sched_result_value = req.get('ticket_patient_scheduling_result_tag_value')
+        sched_result_values_list = get_sched_result_tag_success_values(f'NP_MISSED_ATTRITION')
+    else:
+        event_description = f'Invalid ticket type encountered: {ticket_type}'
+        logger.error(event_description)
+        update_item({
+            'partition_key': partition_key,
+            'sort_key': f'{datetime.now().timestamp}#system_error',
+            'event_description': event_description
+        },
+        bhc_requisitions)
+        return False, sched_result_title
+    
+    # TODO: check other values? (ticket_status, etc.)
+    # check null result value
+    if sched_result_value in [None, '']:
+        event_description = f'Invalid scheduling result: Value={sched_result_value} Title={sched_result_title}'
+        logger.error(event_description)
+        update_item({
+            'partition_key': partition_key,
+            'sort_key': f'{datetime.now().timestamp()}#system_error',
+            'event_description': event_description
+        },
+        bhc_requisitions)
+
+        return False, sched_result_title
+    
+    # check known result value
+    if sched_result_value not in sched_result_values_list:
+        event_description = f'Unknown scheduling result: Value={sched_result_value} Title={sched_result_title}'
+        logger.error(event_description)
+        update_item({
+            'partition_key': partition_key,
+            'sort_key': f'{datetime.now().timestamp()}#system_error',
+            'event_description': event_description
+        },
+        bhc_requisitions)
+
+    return True, sched_result_title
 
 
 def process_NP_ATTR_close_requisition(req, partition_key):
@@ -74,61 +139,59 @@ def process_NP_ATTR_close_requisition(req, partition_key):
     now = int(datetime.now().timestamp())
 
     ticket_type = req.get('ticket_type')
-    sched_tag_value = req.get('ticket_scheduling_result_tag_value')
     ticket_status = req.get('ticket_status')
-    if ticket_type == 'FOLLOW-UP':
-        # TODO: ask gurminder to add follow_up_ticket_scheduling_result_tag_value and reschedule_ticket_scheduling_result_tag_value
-        # TODO: get status tags from dynamodb rule
-        sched_result_values = ['scheduled_follow_up', 'scheduled_before_ticket_follow_up', 'scheduled_by_contact_center']
-    elif ticket_type == 'RESCHEDULE':
-        # TODO: get status tags from dynamodb rule
-        # TODO: see what's up with trailing underscores
-        sched_result_values = ['sch_scheduled', 'scheduled_before_ticket', 'scheduled_by_contact_center_']
-    else:
-        # TODO: raise error or write error event?
-        raise InvalidTicketTypeException(f'Invalid ticket_type: {ticket_type}')
-    
-    
-    if now > consumption_date and sched_tag_value in sched_result_values:
-        # successful ticket solve
-        # write requisition closed event
-        update_item({
-        'partition_key': partition_key,
-        'sort_key': f'{datetime.now()}#requisition_closed',
-        'event_description': f'{ticket_type} ticket solved with {sched_tag_value} result'
-        },
-        bhc_requisitions)
-        # close requisition
-        close_requisition(req, partition_key)
-        # delete consumption_date attr
-        remove_consumption_date_attr(req, partition_key)
-    elif now > consumption_date:
-        # unsuccessful ticket solve
-        update_item({
+
+    if now > consumption_date:  # successful ticket solve
+        req_closeable, sched_result_title = validate_NP_ATTR_close(req, partition_key, ticket_type)
+
+        if req_closeable:
+            # write requisition closed event
+            update_item({
             'partition_key': partition_key,
-            'sort_key': f'{datetime.now()}#unsuccessful_ticket_solve',
-            'event_description': f'Ticket solved with unsuccessful scheduling result {sched_tag_value}'
-        })
-        remove_consumption_date_attr(req, partition_key)
-    elif consumption_date + expiration_timestamp_offset < int(datetime.now().timestamp()):
+            'sort_key': f'{datetime.now()}#requisition_closed',
+            'event_description': f'{ticket_type} ticket solved with result: {sched_result_title}'
+            },
+            bhc_requisitions)
+            # close requisition
+            close_requisition(partition_key)
+            # delete consumption_date attr
+            remove_consumption_date_attr(req, partition_key)
+        else:
+            # write requisition unclosable event
+            update_item({
+            'partition_key': partition_key,
+            'sort_key': f'{datetime.now()}#requisition_unclosable',
+            'event_description': f'{ticket_type} ticket not closed with result: {sched_result_title}'
+            },
+            bhc_requisitions)
+            remove_consumption_date_attr(req, partition_key)
+    elif consumption_date + np_attrition_expiration_timestamp_offset < int(datetime.now().timestamp()):
         # expired requisition
         handle_req_expiration(req)
     else:
-        # TODO: take some action here?
-        pass
+        # TODO: take some action here or fall through?
+        return
 
 
 def lambda_handler(event, context):
     # query dynamo for consumption dates
-    # TODO: add last evaluated key pagination
+    requisitions = []
     response = bhc_requisitions.scan(IndexName='consumption_date-index')
+    requisitions.extend(response.get('Items'))
 
-    for req in response.get('Items'):
+    while 'LastEvaluatedKey' in response:
+        response = bhc_requisitions.scan(
+        IndexName='consumption_date-index',
+        ExclusiveStartKey=response['LastEvaluatedKey']
+        )
+        requisitions.extend(response.get('Items'))
+
+    for req in requisitions:
         partition_key = req.get('partition_key')
         if 'NP_COMPLETED_ATTRITION' in partition_key or 'NP_MISSED_ATTRITION' in partition_key:
             process_NP_ATTR_close_requisition(req, partition_key)
         # elif 'SOME_OTHER_REQ_TYPE' in partition_key:
         #     pass
        
-
+    # TODO: verify that the very last action taken for every logic path is remove_cunsomption_date_attr() in case of dynamo fail
     return

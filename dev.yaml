@@ -30,6 +30,7 @@ Resources:
       Environment:
         Variables:
           environment: dev
+          expiration_timestamp_offset: 123456677
       Policies:
       - Version: '2012-10-17'
         Statement: 
