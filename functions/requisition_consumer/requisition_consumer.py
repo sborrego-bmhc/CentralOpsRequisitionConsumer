@@ -9,6 +9,15 @@ import os
 class DynamoUpdateException(Exception):
     pass
 
+
+class DynamoScanException(Exception):
+    pass
+
+
+class DynamoGetException(Exception):
+    pass
+
+
 class InvalidTicketTypeException(Exception):
     pass
 
@@ -71,18 +80,17 @@ def handle_req_expiration(req):
 
 
 def get_sched_result_tag_success_values(req_type):
-    # TODO: put dynamo stuff behind try/catch block
-    rule = bhc_requisitions.get_item(
-        Key={
-            'partition_key': 'RULE',
-            'sort_key': f'{req_type}_SCHEDULING_RESULT_TAG_VALUES'
-        })
-    
-    return rule.get('Item').get('Success')
+    try:
+        rule = bhc_requisitions.get_item(
+            Key={
+                'partition_key': 'RULE',
+                'sort_key': f'{req_type}_SCHEDULING_RESULT_TAG_VALUES'
+            })
+    except Exception as e:
+        logger.error(e)
+        raise DynamoGetException
 
-def check_ticket_type(req, ticket_type):
-    return
-
+    return rule.get('Item').get('sched_result_tag_values')
 
 
 def validate_NP_ATTR_close(req, partition_key, ticket_type):
@@ -90,11 +98,11 @@ def validate_NP_ATTR_close(req, partition_key, ticket_type):
     if ticket_type == 'FOLLOW-UP':
         sched_result_title = req.get('ticket_scheduling_result_tag_title')
         sched_result_value = req.get('ticket_scheduling_result_tag_value')
-        sched_result_values_list = get_sched_result_tag_success_values(f'NP_COMPLETED_ATTRITION')
+        sched_result_values_list = get_sched_result_tag_success_values('NP_COMPLETED_ATTRITION')
     elif ticket_type == 'MISSED':
         sched_result_title = req.get('ticket_patient_scheduling_result_tag_title')
         sched_result_value = req.get('ticket_patient_scheduling_result_tag_value')
-        sched_result_values_list = get_sched_result_tag_success_values(f'NP_MISSED_ATTRITION')
+        sched_result_values_list = get_sched_result_tag_success_values('NP_MISSED_ATTRITION')
     else:
         event_description = f'Invalid ticket type encountered: {ticket_type}'
         logger.error(event_description)
@@ -130,6 +138,7 @@ def validate_NP_ATTR_close(req, partition_key, ticket_type):
             'event_description': event_description
         },
         bhc_requisitions)
+        # still close the requisition
 
     return True, sched_result_title
 
@@ -141,7 +150,7 @@ def process_NP_ATTR_close_requisition(req, partition_key):
     ticket_type = req.get('ticket_type')
     ticket_status = req.get('ticket_status')
 
-    if now > consumption_date:  # successful ticket solve
+    if now > consumption_date:
         req_closeable, sched_result_title = validate_NP_ATTR_close(req, partition_key, ticket_type)
 
         if req_closeable:
@@ -165,7 +174,8 @@ def process_NP_ATTR_close_requisition(req, partition_key):
             },
             bhc_requisitions)
             remove_consumption_date_attr(req, partition_key)
-    elif consumption_date + np_attrition_expiration_timestamp_offset < int(datetime.now().timestamp()):
+    elif now > consumption_date + np_attrition_expiration_timestamp_offset:
+        # TODO: set requisition_opened value on req open for exppiration handling
         # expired requisition
         handle_req_expiration(req)
     else:
@@ -174,17 +184,22 @@ def process_NP_ATTR_close_requisition(req, partition_key):
 
 
 def lambda_handler(event, context):
-    # query dynamo for consumption dates
+    # scan index for consumption dates
     requisitions = []
-    response = bhc_requisitions.scan(IndexName='consumption_date-index')
-    requisitions.extend(response.get('Items'))
-
-    while 'LastEvaluatedKey' in response:
-        response = bhc_requisitions.scan(
-        IndexName='consumption_date-index',
-        ExclusiveStartKey=response['LastEvaluatedKey']
-        )
+    try:
+        response = bhc_requisitions.scan(IndexName='consumption_date-index')
         requisitions.extend(response.get('Items'))
+
+        while 'LastEvaluatedKey' in response:
+            response = bhc_requisitions.scan(
+            IndexName='consumption_date-index',
+            ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+            requisitions.extend(response.get('Items'))
+    except Exception as e:
+        logger.error(e)
+        raise DynamoScanException(e)
+
 
     for req in requisitions:
         partition_key = req.get('partition_key')
