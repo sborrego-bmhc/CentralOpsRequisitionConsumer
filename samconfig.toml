@@ -48,7 +48,7 @@ parameter_overrides = [
     "PowerToolsLayerArn=arn:aws:lambda:us-west-2:916246436722:layer:aws_lambda_powertools-layer:2",
     "DynamoDbPolicyResource=arn:aws:dynamodb:us-west-2:916246436722:table/BHC_REQUISITIONS",
     "DynamoDbRequisitionQueryPolicyResource=arn:aws:dynamodb:us-west-2:916246436722:table/BHC_REQUISITIONS/index/requisition_status-index",
-    "ExpirationTimeStampOffset=2592000"
+    "NPExpirationTimeStampOffset=2592000"
 ] 
 
 [prod.deploy.parameters]

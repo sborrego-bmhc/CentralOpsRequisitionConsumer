@@ -13,7 +13,7 @@ Parameters:
     Type: 'String'
   Environment:
     Type: 'String'
-  ExpirationTimeStampOffset:
+  NPExpirationTimeStampOffset:
     Type: 'String'
 
 Resources:
@@ -32,7 +32,7 @@ Resources:
       Environment:
         Variables:
           environment: !Ref Environment
-          expiration_timestamp_offset: !Ref ExpirationTimeStampOffset
+          np_attrition_expiration_timestamp_offset: !Ref NPExpirationTimeStampOffset
       Policies:
       - Version: '2012-10-17'
         Statement: 

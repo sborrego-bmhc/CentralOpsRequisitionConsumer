@@ -29,7 +29,7 @@ logger = Logger(log_uncaught_exceptions=True)
 dynamodb_resource = boto3.resource('dynamodb')
 bhc_requisitions = dynamodb_resource.Table('BHC_REQUISITIONS')
 
-
+# TODO: handle collision on sort_key
 def update_item(item, table):
     update_expression = 'SET '
     expression_attribute_values = {}
@@ -42,6 +42,7 @@ def update_item(item, table):
     # remove trailing comma and white space
     update_expression = update_expression[:-2]
 
+    # TODO: check response from update_item
     try:
         table.update_item(
             Key={
@@ -53,6 +54,7 @@ def update_item(item, table):
         )
     except Exception as e:
         logger.error(e)
+        # TODO: check error type, don't always raise exception and kill lambda invocation
         raise DynamoUpdateException(e)
 
 
@@ -66,13 +68,17 @@ def close_requisition(partition_key):
 
 
 def remove_consumption_date_attr(req, partition_key):
-    bhc_requisitions.update_item(
-        Key={
-            'partition_key': partition_key,
-            'sort_key': 'METADATA'
-        },
-        UpdateExpression='REMOVE consumption_date')
-
+    try:
+        bhc_requisitions.update_item(
+            Key={
+                'partition_key': partition_key,
+                'sort_key': 'METADATA'
+            },
+            UpdateExpression='REMOVE consumption_date')
+    except Exception as e:
+        logger.error(e)
+        # raise 
+        
 
 def handle_req_expiration(req):
     # TODO: get requirements, implement
@@ -88,32 +94,35 @@ def get_sched_result_tag_success_values(req_type):
             })
     except Exception as e:
         logger.error(e)
-        raise DynamoGetException
+        raise DynamoGetException(e)
 
     return rule.get('Item').get('sched_result_tag_values')
 
 
-def validate_NP_ATTR_close(req, partition_key, ticket_type):
+def validate_NP_ATTR_close(req, partition_key, ticket_type, pt_chart_no, case_no):
     # system error checks
     if ticket_type == 'FOLLOW-UP':
         sched_result_title = req.get('ticket_scheduling_result_tag_title')
         sched_result_value = req.get('ticket_scheduling_result_tag_value')
         sched_result_values_list = get_sched_result_tag_success_values('NP_COMPLETED_ATTRITION')
-    elif ticket_type == 'MISSED':
+    elif ticket_type == 'RESCHEDULE':
         sched_result_title = req.get('ticket_patient_scheduling_result_tag_title')
         sched_result_value = req.get('ticket_patient_scheduling_result_tag_value')
         sched_result_values_list = get_sched_result_tag_success_values('NP_MISSED_ATTRITION')
     else:
-        event_description = f'Invalid ticket type encountered: {ticket_type}'
+        event_description = f'Unexpected ticket type encountered: {ticket_type}'
         logger.error(event_description)
         update_item({
             'partition_key': partition_key,
-            'sort_key': f'{datetime.now().timestamp}#system_error',
-            'event_description': event_description
+            'sort_key': f'{datetime.now()}#system_error',
+            'event_description': event_description,
+            'pt_chart_no': pt_chart_no,
+            'case_no': case_no
         },
         bhc_requisitions)
         return False, sched_result_title
     
+
     # TODO: check other values? (ticket_status, etc.)
     # check null result value
     if sched_result_value in [None, '']:
@@ -121,21 +130,25 @@ def validate_NP_ATTR_close(req, partition_key, ticket_type):
         logger.error(event_description)
         update_item({
             'partition_key': partition_key,
-            'sort_key': f'{datetime.now().timestamp()}#system_error',
-            'event_description': event_description
+            'sort_key': f'{datetime.now()}#system_error',
+            'event_description': event_description,
+            'pt_chart_no': pt_chart_no,
+            'case_no': case_no
         },
         bhc_requisitions)
-
         return False, sched_result_title
     
+
     # check known result value
     if sched_result_value not in sched_result_values_list:
-        event_description = f'Unknown scheduling result: Value={sched_result_value} Title={sched_result_title}'
+        event_description = f'Unexpected scheduling result: Value={sched_result_value} Title={sched_result_title}'
         logger.error(event_description)
         update_item({
             'partition_key': partition_key,
-            'sort_key': f'{datetime.now().timestamp()}#system_error',
-            'event_description': event_description
+            'sort_key': f'{datetime.now()}#system_error',
+            'event_description': event_description,
+            'pt_chart_no': pt_chart_no,
+            'case_no': case_no
         },
         bhc_requisitions)
         # still close the requisition
@@ -146,19 +159,25 @@ def validate_NP_ATTR_close(req, partition_key, ticket_type):
 def process_NP_ATTR_close_requisition(req, partition_key):
     consumption_date = int(req.get('consumption_date'))
     now = int(datetime.now().timestamp())
+    pt_chart_no = req.get('pt_chart_no')
+    case_no = req.get('case_no')
 
     ticket_type = req.get('ticket_type')
-    ticket_status = req.get('ticket_status')
+    # ticket_status = req.get('ticket_status')
 
+    # TODO: filter on consumption_date?
     if now > consumption_date:
-        req_closeable, sched_result_title = validate_NP_ATTR_close(req, partition_key, ticket_type)
+        # use case dependency on ticket_type tied to requisition type
+        req_closeable, sched_result_title = validate_NP_ATTR_close(req, partition_key, ticket_type, pt_chart_no, case_no)
 
         if req_closeable:
             # write requisition closed event
             update_item({
             'partition_key': partition_key,
             'sort_key': f'{datetime.now()}#requisition_closed',
-            'event_description': f'{ticket_type} ticket solved with result: {sched_result_title}'
+            'event_description': f'{ticket_type} ticket solved with result: {sched_result_title}',
+            'pt_chart_no': pt_chart_no,
+            'case_no': case_no
             },
             bhc_requisitions)
             # close requisition
@@ -170,7 +189,9 @@ def process_NP_ATTR_close_requisition(req, partition_key):
             update_item({
             'partition_key': partition_key,
             'sort_key': f'{datetime.now()}#requisition_unclosable',
-            'event_description': f'{ticket_type} ticket not closed with result: {sched_result_title}'
+            'event_description': f'{ticket_type} ticket not closed with result: {sched_result_title}',
+            'pt_chart_no': pt_chart_no,
+            'case_no': case_no
             },
             bhc_requisitions)
             remove_consumption_date_attr(req, partition_key)
@@ -182,6 +203,7 @@ def process_NP_ATTR_close_requisition(req, partition_key):
         # TODO: take some action here or fall through?
         return
 
+# TODO: set provision capacity = 1 (concurrency?)
 
 def lambda_handler(event, context):
     # scan index for consumption dates
@@ -200,6 +222,7 @@ def lambda_handler(event, context):
         logger.error(e)
         raise DynamoScanException(e)
 
+    logger.info(len(requisitions))
 
     for req in requisitions:
         partition_key = req.get('partition_key')
@@ -208,5 +231,4 @@ def lambda_handler(event, context):
         # elif 'SOME_OTHER_REQ_TYPE' in partition_key:
         #     pass
        
-    # TODO: verify that the very last action taken for every logic path is remove_cunsomption_date_attr() in case of dynamo fail
     return
