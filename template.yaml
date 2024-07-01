@@ -46,3 +46,7 @@ Resources:
           Effect: Allow
           Action: dynamodb:UpdateItem
           Resource: !Ref DynamoDbPolicyResource
+        - Sid: GetItemDynamoPolicy
+          Effect: Allow
+          Action: dynamodb:GetItem
+          Resource: !Ref DynamoDbPolicyResource
